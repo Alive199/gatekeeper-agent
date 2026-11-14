@@ -117,10 +117,10 @@ function decide(task) {
         const proofVk = toField(input.proof_vk ?? "0");
         const regVk = toField(input.registered_vk ?? "0");
         if (proofVk !== regVk) return REJ("VK_SUBSTITUTION");
-        if (BigInt(input.public_balance ?? "0") < BigInt(input.minimum ?? "0")) return REJ("INSUFFICIENT_BALANCE");
-        if (BigInt(input.current_block ?? "0") > BigInt(input.expiry_block ?? "0")) return REJ("EXPIRED");
+        if (BigInt(input.public_balance ?? "0") < BigInt(input.minimum ?? "0")) return REJ("THRESHOLD_MISMATCH");
+        if (BigInt(input.current_block ?? "0") > BigInt(input.expiry_block ?? "0")) return REJ("EXPIRED_CONDITION");
         if (String(input.recipient ?? "").toLowerCase() !== String(input.condition_recipient ?? "").toLowerCase()) return REJ("RECIPIENT_MISMATCH");
-        if (BigInt(input.amount ?? "0") > BigInt(input.max_transfer ?? "0")) return REJ("AMOUNT_EXCEEDS_MAX");
+        if (BigInt(input.amount ?? "0") > BigInt(input.max_transfer ?? "0")) return REJ("AMOUNT_OVERFLOW");
         if (input.proof_tx && seenProofTx.has(String(input.proof_tx).toLowerCase())) return REJ("PROOF_REUSED");
         if (task.deadline_at) {
             const dl = Date.parse(task.deadline_at);
