@@ -129,7 +129,7 @@ function decide(task) {
     } catch (e) {
         return REJ("ERROR");
     }
-    return { decision: "APPROVE", reason_code: "OK" };
+    return { decision: "APPROVE", reason_code: "VALID_CONDITION" };
 }
 
 function buildInputs(task, decision) {
