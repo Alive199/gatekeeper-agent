@@ -174,7 +174,7 @@ async function handleTask(task, startedAt) {
         saveSeen();
     }
 
-    let proof = null, publicSignals = null, kurierTx = null;
+    let proof = null, publicSignals = null;
     const budgetLeft = () => RESPONSE_BUDGET_MS - (Date.now() - startedAt);
     try {
         if (budgetLeft() > 5000) {
@@ -189,19 +189,24 @@ async function handleTask(task, startedAt) {
         proof = null; publicSignals = null;
     }
 
-    // Kurier submission (bounded; never blocks the response past the budget)
-    if (proof && KURIER_API_KEY && budgetLeft() > 12000) {
-        try {
-            const sub = await submitProof(KURIER_API_KEY, proof, publicSignals, VK_HASH);
+    // Kurier submission runs in the background: the platform's delivery
+    // timeout (~15s) is shorter than waiting for on-chain finalization
+    // (~12s+), so waiting would make every task look timed-out even
+    // though the proof is fine. Respond as soon as the proof is ready;
+    // the submission still lands on zkVerify and is logged here.
+    if (proof && KURIER_API_KEY) {
+        submitProof(KURIER_API_KEY, proof, publicSignals, VK_HASH).then(async (sub) => {
             const jobId = sub?.jobId;
-            if (jobId) {
-                const fin = await waitFinalized(KURIER_API_KEY, jobId, Math.min(12000, budgetLeft() - 2000));
-                kurierTx = fin?.txHash || fin?.tx_hash || null;
-                log({ task_id: taskId, step: "kurier", jobId, status: fin?.status, txHash: kurierTx });
+            if (!jobId) return;
+            try {
+                const fin = await waitFinalized(KURIER_API_KEY, jobId, 30000);
+                log({ task_id: taskId, step: "kurier", jobId, status: fin?.status, txHash: fin?.txHash || fin?.tx_hash || null });
+            } catch (e) {
+                log({ task_id: taskId, step: "kurier_failed", error: String(e).slice(0, 200) });
             }
-        } catch (e) {
+        }).catch((e) => {
             log({ task_id: taskId, step: "kurier_failed", error: String(e).slice(0, 200) });
-        }
+        });
     }
 
     const response = {
@@ -209,7 +214,6 @@ async function handleTask(task, startedAt) {
         reason_code,
         ...(proof ? { proof, public_signals: publicSignals } : {}),
         ...(input.proof_tx ? { proof_tx: input.proof_tx } : {}),
-        ...(kurierTx ? { kurier_tx: kurierTx } : {}),
     };
     const out = { status: 200, body: response };
     responseCache.set(taskId, out);
